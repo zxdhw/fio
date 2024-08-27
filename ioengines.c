@@ -309,6 +309,7 @@ int td_io_getevents(struct thread_data *td, unsigned int min, unsigned int max,
 	r = 0;
 	if (max && td->io_ops->getevents)
 		r = td->io_ops->getevents(td, min, max, t);
+	// printf(" ------ret is %d----\n",r);
 out:
 	if (r >= 0) {
 		/*
@@ -383,8 +384,14 @@ enum fio_q_status td_io_queue(struct thread_data *td, struct io_u *io_u)
 			td->io_issue_bytes[ddir] += buflen;
 		}
 		td->rate_io_issue_bytes[ddir] += buflen;
+		if(td->o.hitchhike){
+			//hitchhike stat
+			td->io_issues[ddir] += (td->o.hitchhike-1);
+			td->io_issue_bytes[ddir] += buflen * (td->o.hitchhike-1);
+			td->rate_io_issue_bytes[ddir] += buflen * (td->o.hitchhike-1);
+		}
 	}
-
+	//加到libaio的queue中
 	ret = td->io_ops->queue(td, io_u);
 	zbd_queue_io_u(td, io_u, ret);
 
@@ -395,6 +402,11 @@ enum fio_q_status td_io_queue(struct thread_data *td, struct io_u *io_u)
 		td->io_issue_bytes[ddir] -= buflen;
 		td->rate_io_issue_bytes[ddir] -= buflen;
 		io_u_clear(td, io_u, IO_U_F_FLIGHT);
+		if(td->o.hitchhike){
+			td->io_issues[ddir] -= (td->o.hitchhike-1);
+			td->io_issue_bytes[ddir] -= buflen * (td->o.hitchhike-1);
+			td->rate_io_issue_bytes[ddir] -= buflen * (td->o.hitchhike-1);
+		}
 	}
 
 	/*
@@ -429,7 +441,7 @@ enum fio_q_status td_io_queue(struct thread_data *td, struct io_u *io_u)
 		io_u_mark_submit(td, 1);
 		io_u_mark_complete(td, 1);
 	}
-
+	//同步
 	if (ret == FIO_Q_COMPLETED) {
 		if (ddir_rw(io_u->ddir) ||
 		    (ddir_sync(io_u->ddir) && td->runstate != TD_FSYNCING)) {
@@ -438,13 +450,18 @@ enum fio_q_status td_io_queue(struct thread_data *td, struct io_u *io_u)
 		}
 
 		td->last_ddir_issued = ddir;
+	//异步
 	} else if (ret == FIO_Q_QUEUED) {
 		td->io_u_queued++;
 
 		if (ddir_rw(io_u->ddir) ||
 		    (ddir_sync(io_u->ddir) && td->runstate != TD_FSYNCING))
+			//请求计数统计
 			td->ts.total_io_u[io_u->ddir]++;
 
+		//zhengxd: submit io queue (o->iodepth_batch 默认等于1， 如果设置为0，则 = o->iodepth)
+		// printf("-----btach is %d----/n",td->o.iodepth_batch);
+		//提交iocb
 		if (td->io_u_queued >= td->o.iodepth_batch)
 			td_io_commit(td);
 

@@ -21,6 +21,8 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
  */
+// #include <linux/aio_abi.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <signal.h>
@@ -32,6 +34,7 @@
 #include <pthread.h>
 
 #include "fio.h"
+#include "io_u.h"
 #include "smalloc.h"
 #include "verify.h"
 #include "diskutil.h"
@@ -1035,7 +1038,7 @@ static void do_io(struct thread_data *td, uint64_t *bytes_done)
 		    (!td->o.time_based ||
 		     (td->o.time_based && td->o.verify != VERIFY_NONE)))
 			break;
-
+		//准备一个io的参数
 		io_u = get_io_u(td);
 		if (IS_ERR_OR_NULL(io_u)) {
 			int err = PTR_ERR(io_u);
@@ -1117,11 +1120,13 @@ static void do_io(struct thread_data *td, uint64_t *bytes_done)
 			}
 
 		} else {
+			//提交IO
 			ret = io_u_submit(td, io_u);
 
 			if (should_check_rate(td))
 				td->rate_next_io_time[ddir] = usec_for_io(td, ddir);
 
+			//？？？？？
 			if (io_queue_event(td, io_u, &ret, ddir, &bytes_issued, 0, &comp_time))
 				break;
 
@@ -1161,6 +1166,7 @@ reap:
 			lat_target_check(td);
 	}
 
+	//更新cpu利用率
 	check_update_rusage(td);
 
 	if (td->trim_entries)
@@ -1256,7 +1262,10 @@ static void cleanup_io_u(struct thread_data *td)
 
 		if (td->io_ops->io_u_free)
 			td->io_ops->io_u_free(td, io_u);
-
+		//释放hitchhker空间
+		if(td->o.hitchhike){
+			free(io_u->hit_buf);
+		}
 		fio_memfree(io_u, sizeof(*io_u), td_offload_overlap(td));
 	}
 
@@ -1305,6 +1314,11 @@ static int init_io_u(struct thread_data *td)
 		memset(io_u, 0, sizeof(*io_u));
 		INIT_FLIST_HEAD(&io_u->verify_list);
 		dprint(FD_MEM, "io_u alloc %p, index %u\n", io_u, i);
+
+		//初始化hitchhiker
+		if(td->o.hitchhike){
+			io_u->hit_buf = calloc(1,sizeof(struct hitchhiker));
+		}
 
 		io_u->index = i;
 		io_u->flags = IO_U_F_FREE;
@@ -1362,6 +1376,12 @@ int init_io_u_buffers(struct thread_data *td)
 	if (td_ioengine_flagged(td, FIO_NOIO) ||
 	    !(td_read(td) || td_write(td) || (td_trim(td) && td->o.num_range > 1)))
 		data_xfer = 0;
+	
+	//给每个mio分配buffer的时候顺带上hio的
+	if(td->o.hitchhike){
+		td->orig_buffer_size = (unsigned long long) max_bs
+					* (unsigned long long) max_units * (unsigned long long)td->o.hitchhike;
+	}
 
 	/*
 	 * if we may later need to do address alignment, then add any
@@ -1384,7 +1404,7 @@ int init_io_u_buffers(struct thread_data *td)
 		log_err("fio: IO memory too large. Reduce max_bs or iodepth\n");
 		return 1;
 	}
-
+	//分配成功返回0, 根据td->orig_buffer_size的大小分配mem，内存指针：td->orig_buffer
 	if (data_xfer && allocate_io_mem(td))
 		return 1;
 
@@ -1414,6 +1434,9 @@ int init_io_u_buffers(struct thread_data *td)
 		}
 		if (td_trim(td) && td->o.num_range > 1)
 			p += trim_bs;
+		//设置每个mio的buffer偏移
+		else if(td->o.hitchhike)
+			p += max_bs * td->o.hitchhike;
 		else
 			p += max_bs;
 	}
@@ -1834,7 +1857,7 @@ static void *thread_main(void *data)
 					  o->ioprio_hint);
 		td->ts.ioprio = td->ioprio;
 	}
-
+	//libaio初始化用户态相关信息
 	if (td_io_init(td))
 		goto err;
 
@@ -1843,9 +1866,10 @@ static void *thread_main(void *data)
 			 "are selected, queue depth will be capped at 1\n");
 	}
 
+	//初始化buffer
 	if (init_io_u(td))
 		goto err;
-
+	//libaio初始化内核态相关信息
 	if (td->io_ops->post_init && td->io_ops->post_init(td))
 		goto err;
 
@@ -1902,6 +1926,13 @@ static void *thread_main(void *data)
 	memset(bytes_done, 0, sizeof(bytes_done));
 	clear_state = false;
 
+	// struct hit_stats* stats_bufs = (struct hit_stats*)calloc(1, sizeof(struct hit_stats));
+	// io_stat(stats_bufs);
+	// printf("----block time is %ld, block is %ld----\n",stats_bufs->block_time, stats_bufs->block_count);
+	// printf("----count is %ld ----\n",stats_bufs->io_count_kernel);
+	// printf("----req time is %ld, req is %ld----\n",stats_bufs->req_time, stats_bufs->req_count);
+
+
 	while (keep_running(td)) {
 		uint64_t verify_bytes;
 
@@ -1923,6 +1954,7 @@ static void *thread_main(void *data)
 			if (!td->o.rand_repeatable)
 				/* save verify rand state to replay hdr seeds later at verify */
 				frand_copy(&td->verify_state_last_do_io, &td->verify_state);
+			//执行IO流程。
 			do_io(td, bytes_done);
 			if (!td->o.rand_repeatable)
 				frand_copy(&td->verify_state, &td->verify_state_last_do_io);
@@ -2027,10 +2059,14 @@ static void *thread_main(void *data)
 			goto err;
 		}
 	}
-
+	//CPU 信息
 	update_rusage_stat(td);
+	//运行时间
 	td->ts.total_run_time = mtime_since_now(&td->epoch);
+	//处理的数据量
 	for_each_rw_ddir(ddir) {
+		td->ts.hitchhike = td->o.hitchhike;
+		td->ts.io_bytes_hitchhike[ddir] = td->io_bytes_hitchhike[ddir];
 		td->ts.io_bytes[ddir] = td->io_bytes[ddir];
 	}
 
@@ -2044,6 +2080,12 @@ static void *thread_main(void *data)
 
 	iolog_compress_exit(td);
 	rate_submit_exit(td);
+
+	// io_stat(stats_bufs);
+	// printf("----block time is %ld, block is %ld----\n",stats_bufs->block_time, stats_bufs->block_count);
+	// printf("----count is %ld ----\n",stats_bufs->io_count_kernel);
+	// printf("----req time is %ld, req is %ld----\n",stats_bufs->req_time, stats_bufs->req_count);
+	// free(stats_bufs);
 
 	if (o->exec_postrun)
 		exec_string(o, o->exec_postrun, "postrun");

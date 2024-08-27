@@ -9,6 +9,7 @@
 #include "lib/ieee754.h"
 #include "lib/pattern.h"
 #include "td_error.h"
+#include <stdint.h>
 
 enum fio_zone_mode {
 	ZONE_MODE_NOT_SPECIFIED	= 0,
@@ -400,6 +401,8 @@ struct thread_options {
 
 	unsigned int log_entries;
 	unsigned int log_prio;
+
+	unsigned int hitchhike;
 };
 
 #define FIO_TOP_STR_MAX		256
@@ -717,6 +720,7 @@ struct thread_options_pack {
 	uint8_t dp_scheme_file[FIO_TOP_STR_MAX];
 
 	uint32_t num_range;
+	uint32_t hitchhike;
 	/*
 	 * verify_pattern followed by buffer_pattern from the unpacked struct
 	 */

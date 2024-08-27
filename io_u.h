@@ -7,6 +7,7 @@
 #include "debug.h"
 #include "file.h"
 #include "workqueue.h"
+#include "engines/hitchhike.h"
 
 #ifdef CONFIG_LIBAIO
 #include <libaio.h>
@@ -64,6 +65,7 @@ struct io_u {
 	unsigned long long offset;	/* is really ->xfer_offset... */
 	unsigned long long verify_offset;	/* is really ->offset */
 	void *buf;
+	struct hitchhiker *hit_buf;
 
 	/*
 	 * Initial seed for generating the buffer contents

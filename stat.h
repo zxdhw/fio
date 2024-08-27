@@ -5,6 +5,7 @@
 #include "lib/output_buffer.h"
 #include "diskutil.h"
 #include "json.h"
+#include <stdint.h>
 
 struct group_run_stats {
 	uint64_t max_run[DDIR_RWDIR_CNT], min_run[DDIR_RWDIR_CNT];
@@ -222,6 +223,9 @@ struct thread_stat {
 	uint64_t io_bytes[DDIR_RWDIR_CNT];
 	uint64_t runtime[DDIR_RWDIR_CNT];
 	uint64_t total_run_time;
+	//hitchhike
+	uint64_t hitchhike;
+	uint64_t io_bytes_hitchhike[DDIR_RWDIR_CNT];
 
 	/*
 	 * IO Error related stats

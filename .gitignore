@@ -2,6 +2,9 @@
 *.o
 *.so
 *.exe
+*.json
+/.vscode
+/.cache
 /.depend
 /FIO-VERSION-FILE
 /config-host.h

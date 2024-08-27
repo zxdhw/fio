@@ -14,6 +14,7 @@
 #include "lib/pow2.h"
 #include "lib/output_buffer.h"
 #include "helper_thread.h"
+#include "log.h"
 #include "smalloc.h"
 #include "zbd.h"
 #include "oslib/asprintf.h"
@@ -573,6 +574,29 @@ static void show_ddir_status(struct group_run_stats *rs, struct thread_stat *ts,
 			iops_p, bw_p, bw_p_alt, io_p,
 			(unsigned long long) ts->runtime[ddir],
 			post_st ? : "");
+	
+	if(ts->hitchhike){
+		unsigned long long bw_h, iops_h;
+		char *io_h_p, *bw_h_p, *bw_h_p_alt, *iops_h_p = NULL;
+		bw_h = (1000 * ts->io_bytes_hitchhike[ddir]) / runt;
+		// printf("io btyes hitchhike is %ld",ts->io_bytes_hitchhike[ddir]);
+		bw_h_p = num2str(bw_h, ts->sig_figs, 1, i2p, ts->unit_base);
+		bw_h_p_alt = num2str(bw_h, ts->sig_figs, 1, !i2p, ts->unit_base);
+
+		io_h_p = num2str(ts->io_bytes_hitchhike[ddir], ts->sig_figs, 1, i2p, N2S_BYTE);
+		iops_h = (1000 * (uint64_t)ts->total_io_u[ddir] * ts->hitchhike) / runt;
+		iops_h_p = num2str(iops_h, ts->sig_figs, 1, 0, N2S_NONE);
+		log_buf(out,"---------------------hitchhike---------------------\n");
+		log_buf(out, "Hitchhike  %s: IOPS=%s, BW=%s (%s)(%s/%llumsec)\n",
+				(ts->unified_rw_rep == UNIFIED_MIXED) ? "mixed" : io_ddir_name(ddir),
+				iops_h_p, bw_h_p, bw_h_p_alt, io_h_p,
+				(unsigned long long) ts->runtime[ddir]);
+		log_buf(out,"---------------------hitchhike---------------------\n");
+		free(io_h_p);
+		free(bw_h_p);
+		free(bw_h_p_alt);
+		free(iops_h_p);
+	}
 
 	free(post_st);
 	free(io_p);
@@ -1236,6 +1260,7 @@ static void show_thread_status_normal(struct thread_stat *ts,
 			(unsigned long long) ts->majf,
 			(unsigned long long) ts->minf);
 
+	//ts->total_io_u用于计算比例。
 	stat_calc_dist(ts->io_u_map, ddir_rw_sum(ts->total_io_u), io_u_dist);
 	log_buf(out, "  IO depths    : 1=%3.1f%%, 2=%3.1f%%, 4=%3.1f%%, 8=%3.1f%%,"
 		 " 16=%3.1f%%, 32=%3.1f%%, >=64=%3.1f%%\n", io_u_dist[0],
@@ -1268,6 +1293,12 @@ static void show_thread_status_normal(struct thread_stat *ts,
 					(unsigned long long) ts->drop_io_u[0],
 					(unsigned long long) ts->drop_io_u[1],
 					(unsigned long long) ts->drop_io_u[2]);
+	//用于输出hitchhike的请求数量
+	log_buf(out, "     hitchhike issued rwts: total=%llu,%llu,%llu,%llu\n",
+					(unsigned long long) ts->total_io_u[0] * ts->hitchhike,
+					(unsigned long long) ts->total_io_u[1] * ts->hitchhike,
+					(unsigned long long) ts->total_io_u[2] * ts->hitchhike,
+					(unsigned long long) ts->total_io_u[3] * ts->hitchhike);
 	if (ts->continue_on_error) {
 		log_buf(out, "     errors    : total=%llu, first_error=%d/<%s>\n",
 					(unsigned long long)ts->total_err_count,
@@ -2284,6 +2315,8 @@ void sum_thread_stats(struct thread_stat *dst, struct thread_stat *src)
 			sum_clat_prio_stats(dst, src, l, l);
 
 			dst->io_bytes[l] += src->io_bytes[l];
+			dst->io_bytes_hitchhike[l] += src->io_bytes_hitchhike[l];
+
 
 			if (dst->runtime[l] < src->runtime[l])
 				dst->runtime[l] = src->runtime[l];
@@ -2569,6 +2602,9 @@ void __show_run_stats(void)
 		ts->latency_percentile = td->o.latency_percentile;
 		ts->latency_window = td->o.latency_window;
 
+		ts->hitchhike = td->o.hitchhike;
+		// printf("-----ts hitchhike is %d", ts->hitchhike);
+
 		ts->nr_block_infos = td->ts.nr_block_infos;
 		for (k = 0; k < ts->nr_block_infos; k++)
 			ts->block_infos[k] = td->ts.block_infos[k];
@@ -2758,6 +2794,7 @@ int __show_running_run_stats(void)
 		td->update_rusage = 1;
 		for_each_rw_ddir(ddir) {
 			td->ts.io_bytes[ddir] = td->io_bytes[ddir];
+			td->ts.io_bytes_hitchhike[ddir] = td->io_bytes_hitchhike[ddir];
 		}
 		td->ts.total_run_time = mtime_since(&td->epoch, &ts);
 
@@ -3114,6 +3151,8 @@ void reset_io_stats(struct thread_data *td)
 		reset_io_stat(&ts->iops_stat[i]);
 
 		ts->io_bytes[i] = 0;
+		//初始化
+		ts->io_bytes_hitchhike[i] = 0;
 		ts->runtime[i] = 0;
 		ts->total_io_u[i] = 0;
 		ts->short_io_u[i] = 0;

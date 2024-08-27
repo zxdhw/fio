@@ -5469,6 +5469,18 @@ struct fio_option fio_options[FIO_MAX_OPTS] = {
 		.category = FIO_OPT_C_GENERAL,
 		.group  = FIO_OPT_G_RUNTIME,
 	},
+		{
+		.name	= "hitchhike",
+		.lname	= "hitchhike io stack",
+		.type	= FIO_OPT_ULL,
+		.off1	= offsetof(struct thread_options, hitchhike),
+		.help	= "Set hitchhike io stack",
+		.minval = 0,
+		.interval = 1,
+		.def	= "0",
+		.category = FIO_OPT_C_IO,
+		.group	= FIO_OPT_G_IO_BASIC,
+	},
 	{
 		.name = NULL,
 	},
