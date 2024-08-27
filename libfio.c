@@ -142,6 +142,7 @@ void reset_all_stats(struct thread_data *td)
 
 	for (i = 0; i < DDIR_RWDIR_CNT; i++) {
 		td->io_bytes[i] = 0;
+		td->io_bytes_hitchhike[i] = 0;
 		td->io_blocks[i] = 0;
 		td->io_issues[i] = 0;
 		td->ts.total_io_u[i] = 0;

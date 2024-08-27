@@ -2471,6 +2471,13 @@ with the caveat that when used on the command line, they must come after the
 	reap events. The reaping mode is only enabled when polling for a minimum of
 	0 events (e.g. when :option:`iodepth_batch_complete` `=0`).
 
+.. option:: hitchhike : [libaio]
+
+	Normally, with the libaio engine in use, fio will use the
+	`io_submit_hit` system call to submit request, and use :manpage:`io_getevents(2)`
+	system call to get returned events.  With this flag turned on,  :manpage:`io_getevents(2)` 
+	polls for a minimum of 0 events (e.g. :option:`iodepth_batch_complete` `=0`).
+
 .. option:: hipri_percentage : [pvsync2]
 
 	When hipri is set this determines the probability of a pvsync2 I/O being high

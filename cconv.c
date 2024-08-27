@@ -104,6 +104,7 @@ int convert_thread_options_to_cpu(struct thread_options *o,
 	o->unit_base = le32_to_cpu(top->unit_base);
 	o->ddir_seq_nr = le32_to_cpu(top->ddir_seq_nr);
 	o->ddir_seq_add = le64_to_cpu(top->ddir_seq_add);
+	o->hitchhike = le32_to_cpu(top->hitchhike);
 	o->iodepth = le32_to_cpu(top->iodepth);
 	o->iodepth_low = le32_to_cpu(top->iodepth_low);
 	o->iodepth_batch = le32_to_cpu(top->iodepth_batch);
@@ -408,6 +409,7 @@ void convert_thread_options_to_net(struct thread_options_pack *top,
 	top->kb_base = cpu_to_le32(o->kb_base);
 	top->unit_base = cpu_to_le32(o->unit_base);
 	top->ddir_seq_nr = cpu_to_le32(o->ddir_seq_nr);
+	top->hitchhike = cpu_to_le32(o->hitchhike);
 	top->iodepth = cpu_to_le32(o->iodepth);
 	top->iodepth_low = cpu_to_le32(o->iodepth_low);
 	top->iodepth_batch = cpu_to_le32(o->iodepth_batch);

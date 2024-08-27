@@ -1,3 +1,5 @@
+#include <stdint.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <string.h>
 #include <assert.h>
@@ -279,7 +281,7 @@ static int get_next_rand_offset(struct thread_data *td, struct fio_file *f,
 {
 	if (td->o.random_distribution == FIO_RAND_DIST_RANDOM) {
 		uint64_t lastb;
-
+		//计算文件的块数量（最后一个块）
 		lastb = last_block(td, f, ddir);
 		if (!lastb)
 			return 1;
@@ -439,6 +441,37 @@ static int get_next_block(struct thread_data *td, struct io_u *io_u,
 			if (should_do_random(td, ddir)) {
 				ret = get_next_rand_block(td, f, ddir, &b);
 				*is_random = true;
+				if(td->o.hitchhike > 1){
+					int i;
+					for(i = 0; i < (td->o.hitchhike - 1); i++ ){
+						uint64_t offset_h;
+						get_next_rand_block(td, f, ddir, &offset_h);
+						//按照4K进行管理，offset_h在这里相当于pageid，td->o.ba[ddir]=4096
+						io_u->hit_buf->addr[i] = offset_h * td->o.ba[ddir];
+
+						if (io_u->hit_buf->addr[i] >= f->io_size) {
+							dprint(FD_IO, "hitchhike get_next_offset: offset %llu >= io_size %llu\n",
+										(unsigned long long) io_u->offset,
+										(unsigned long long) f->io_size);
+							return 1;
+						}
+						//更新offset地址（+文件偏移）
+						io_u->hit_buf->addr[i-1] += f->file_offset;
+						if (io_u->hit_buf->addr[i-1] >= f->real_file_size) {
+							dprint(FD_IO, "hitchhike get_next_offset: offset %llu >= size %llu\n",
+										(unsigned long long) io_u->offset,
+										(unsigned long long) f->real_file_size);
+							return 1;
+						}
+
+					}
+					// hitchhike - 8; hio = 7; index(max) = 6
+					io_u->hit_buf->max = i-1;
+					io_u->hit_buf->in_use = 1;
+					// io_u->hit_buf->size = td->o.ba[ddir];
+	
+				}
+				// printf("----ret is %d, b is %lu, ba is %llu------\n", ret,b,td->o.ba[ddir]);
 			} else {
 				*is_random = false;
 				io_u_set(td, io_u, IO_U_F_BUSY_OK);
@@ -502,6 +535,7 @@ static int get_next_offset(struct thread_data *td, struct io_u *io_u,
 	assert(ddir_rw(ddir));
 
 	if (td->o.ddir_seq_nr && !--td->ddir_seq_nr) {
+		//顺序读写已经完成
 		rw_seq_hit = 1;
 		td->ddir_seq_nr = td->o.ddir_seq_nr;
 	}
@@ -515,7 +549,7 @@ static int get_next_offset(struct thread_data *td, struct io_u *io_u,
 					(unsigned long long) f->io_size);
 		return 1;
 	}
-
+	//更新offset地址（+文件偏移）
 	io_u->offset += f->file_offset;
 	if (io_u->offset >= f->real_file_size) {
 		dprint(FD_IO, "get_next_offset: offset %llu >= size %llu\n",
@@ -1486,7 +1520,7 @@ static long set_io_u_file(struct thread_data *td, struct io_u *io_u)
 
 		io_u->file = f;
 		get_file(f);
-
+		//获取offset
 		if (!fill_io_u(td, io_u))
 			break;
 
@@ -1721,6 +1755,7 @@ again:
 
 		io_u->error = 0;
 		io_u->acct_ddir = -1;
+		//已经准备好的请求队列（待下发给内核）
 		td->cur_depth++;
 		assert(!(td->flags & TD_F_CHILD));
 		io_u_set(td, io_u, IO_U_F_IN_CUR_DEPTH);
@@ -1876,6 +1911,7 @@ struct io_u *get_io_u(struct thread_data *td)
 	if (td->flags & TD_F_READ_IOLOG) {
 		if (read_iolog_get(td, io_u))
 			goto err_put;
+	//设置相关参数
 	} else if (set_io_u_file(td, io_u)) {
 		ret = -EBUSY;
 		dprint(FD_IO, "io_u %p, setting file failed\n", io_u);
@@ -1895,7 +1931,7 @@ struct io_u *get_io_u(struct thread_data *td)
 			dprint(FD_IO, "get_io_u: zero buflen on %p\n", io_u);
 			goto err_put;
 		}
-
+		//zhengxd： 更新文件的最后操作位置
 		f->last_start[io_u->ddir] = io_u->offset;
 		f->last_pos[io_u->ddir] = io_u->offset + io_u->buflen;
 
@@ -1933,6 +1969,7 @@ out:
 	assert(io_u->file);
 	if (!td_io_prep(td, io_u)) {
 		if (!td->o.disable_lat)
+			//slat的开始时间
 			fio_gettime(&io_u->start_time, NULL);
 
 		if (do_scramble)
@@ -2126,17 +2163,22 @@ static void io_completed(struct thread_data *td, struct io_u **io_u_ptr,
 
 	if (!io_u->error && ddir_rw(ddir)) {
 		unsigned long long bytes = io_u->xfer_buflen - io_u->resid;
+		// printf(" -----byte is %llu, %llu, %llu-----\n", io_u->xfer_buflen,io_u->resid,bytes);
 		int ret;
 
 		/*
 		 * Make sure we notice short IO from here, and requeue them
 		 * appropriately!
 		 */
+		//暂时忽略这种情况
 		if (bytes && io_u->resid) {
 			io_u->xfer_buflen = io_u->resid;
 			io_u->xfer_buf += bytes;
 			io_u->offset += bytes;
 			td->ts.short_io_u[io_u->ddir]++;
+			if(td->o.hitchhike){
+				printf("----A Short IO is noticed in hitchhike-----\n");
+			}
 			if (io_u->offset < io_u->file->real_file_size) {
 				requeue_io_u(td, io_u_ptr);
 				return;
@@ -2145,6 +2187,10 @@ static void io_completed(struct thread_data *td, struct io_u **io_u_ptr,
 
 		td->io_blocks[ddir]++;
 		td->io_bytes[ddir] += bytes;
+		//修正数据量
+		if(td->o.hitchhike){
+			td->io_bytes_hitchhike[ddir] += bytes * (td->o.hitchhike);
+		}
 
 		if (!(io_u->flags & IO_U_F_VER_LIST)) {
 			td->this_io_blocks[ddir]++;
@@ -2158,6 +2204,11 @@ static void io_completed(struct thread_data *td, struct io_u **io_u_ptr,
 			account_io_completion(td, io_u, icd, ddir, bytes);
 
 		icd->bytes_done[ddir] += bytes;
+
+		//修正数据量
+		if(td->o.hitchhike){
+			icd->bytes_done[ddir] += bytes * (td->o.hitchhike - 1);
+		}
 
 		if (io_u->end_io) {
 			ret = io_u->end_io(td, io_u_ptr);
@@ -2276,7 +2327,9 @@ int io_u_queued_complete(struct thread_data *td, int min_evts)
 
 	/* No worries, td_io_getevents fixes min and max if they are
 	 * set incorrectly */
+	//回收请求
 	ret = td_io_getevents(td, min_evts, td->o.iodepth_batch_complete_max, tvp);
+	// printf("----complette is %d----\n",ret);
 	if (ret < 0) {
 		td_verror(td, -ret, "td_io_getevents");
 		return ret;
@@ -2284,6 +2337,7 @@ int io_u_queued_complete(struct thread_data *td, int min_evts)
 		return ret;
 
 	init_icd(td, &icd, ret);
+	//调用td->io_ops->events 完成请求。
 	ios_completed(td, &icd);
 	if (icd.error) {
 		td_verror(td, icd.error, "io_u_queued_complete");
@@ -2300,6 +2354,7 @@ int io_u_queued_complete(struct thread_data *td, int min_evts)
  */
 void io_u_queued(struct thread_data *td, struct io_u *io_u)
 {
+	//启动计时(ramp_time, 斜坡时间，用于缓冲，在执行一段时间后再进行统计)
 	if (!td->o.disable_slat && ramp_time_over(td) && td->o.stats) {
 		unsigned long slat_time;
 

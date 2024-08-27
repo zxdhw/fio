@@ -369,6 +369,8 @@ static int fio_ioring_prep(struct thread_data *td, struct io_u *io_u)
 		sqe->flags = 0;
 	}
 
+	// if()
+
 	if (io_u->ddir == DDIR_READ || io_u->ddir == DDIR_WRITE) {
 		if (o->fixedbufs) {
 			sqe->opcode = fixed_ddir_to_op[io_u->ddir];

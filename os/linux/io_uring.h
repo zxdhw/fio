@@ -83,6 +83,7 @@ enum {
 	IOSQE_ASYNC_BIT,
 	IOSQE_BUFFER_SELECT_BIT,
 	IOSQE_CQE_SKIP_SUCCESS_BIT,
+	IOSQE_HIT_BIT,
 };
 
 /*
@@ -102,6 +103,8 @@ enum {
 #define IOSQE_BUFFER_SELECT	(1U << IOSQE_BUFFER_SELECT_BIT)
 /* don't post CQE if request succeeded */
 #define IOSQE_CQE_SKIP_SUCCESS	(1U << IOSQE_CQE_SKIP_SUCCESS_BIT)
+// hit enable
+#define IOSQE_HIT	(1U << IOSQE_HIT_BIT)
 
 /*
  * io_uring_setup() flags
