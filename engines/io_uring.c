@@ -7,6 +7,7 @@
  *
  */
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <errno.h>
 #include <sys/time.h>
@@ -19,6 +20,7 @@
 #include "../lib/fls.h"
 #include "../lib/roundup.h"
 #include "../verify.h"
+#include "hitchhike.h"
 
 #ifdef ARCH_HAVE_IOURING
 
@@ -73,6 +75,8 @@ struct ioring_data {
 
 	struct io_sq_ring sq_ring;
 	struct io_uring_sqe *sqes;
+	//zhengxd:  hitchhiker
+	struct hitchhiker *hites;
 	struct iovec *iovecs;
 	unsigned sq_ring_mask;
 
@@ -84,7 +88,7 @@ struct ioring_data {
 	unsigned iodepth;
 	int prepped;
 
-	struct ioring_mmap mmap[3];
+	struct ioring_mmap mmap[4];
 
 	struct cmdprio cmdprio;
 
@@ -369,7 +373,14 @@ static int fio_ioring_prep(struct thread_data *td, struct io_u *io_u)
 		sqe->flags = 0;
 	}
 
-	// if()
+	//zhengxd: add hitchhiker to kernel memory 
+	if(td->o.hitchhike > 1){
+		sqe->flags |= IOSQE_HIT;
+		struct hitchhiker *hit;
+		hit = &ld->hites[io_u->index];
+		memcpy(hit, io_u->hit_buf, sizeof(struct hitchhiker));
+		hit->size = io_u->xfer_buflen;
+	}
 
 	if (io_u->ddir == DDIR_READ || io_u->ddir == DDIR_WRITE) {
 		if (o->fixedbufs) {
@@ -395,6 +406,11 @@ static int fio_ioring_prep(struct thread_data *td, struct io_u *io_u)
 				sqe->addr = (unsigned long) iov;
 				sqe->len = 1;
 			}
+			
+			//zhengxd: kernel buf has already support hitchhike, so we don't need to set the size of hitchhike
+			// if(td->o.hitchhike){
+			// 	iov->iov_len = io_u->xfer_buflen * td->o.hitchhike;
+			// }
 		}
 		sqe->rw_flags = 0;
 		if (!td->o.odirect && o->uncached)
@@ -856,6 +872,16 @@ static int fio_ioring_mmap(struct ioring_data *ld, struct io_uring_params *p)
 	cring->ring_entries = ptr + p->cq_off.ring_entries;
 	cring->cqes = ptr + p->cq_off.cqes;
 	ld->cq_ring_mask = *cring->ring_mask;
+
+	//zhengxd: hit buf mmap
+	if(p->flags & IORING_SETUP_HIT){
+		ld->mmap[3].len = p->sq_entries * sizeof(struct hitchhiker);
+		ld->hites = mmap(0, ld->mmap[3].len, PROT_READ | PROT_WRITE,
+				MAP_SHARED | MAP_POPULATE, ld->ring_fd,
+				IORING_OFF_HIT);
+		ld->mmap[3].ptr = ld->hites;
+	}
+
 	return 0;
 }
 
@@ -902,6 +928,9 @@ static int fio_ioring_queue_init(struct thread_data *td)
 
 	memset(&p, 0, sizeof(p));
 
+	if(td->o.hitchhike > 1){
+		p.flags |= IORING_SETUP_HIT;
+	}
 	if (o->hipri)
 		p.flags |= IORING_SETUP_IOPOLL;
 	if (o->sqpoll_thread) {

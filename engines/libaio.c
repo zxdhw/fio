@@ -123,6 +123,9 @@ static int fio_libaio_prep(struct thread_data *td, struct io_u *io_u)
 			io_prep_pread(iocb, f->fd, io_u->xfer_buf, (io_u->xfer_buflen) * td->o.hitchhike, io_u->offset);
 			iocb->u.c.__pad3 = io_u->xfer_buflen;
 			io_u->hit_buf->size = io_u->xfer_buflen;
+			if(td->o.hitchhike == 1){
+				io_u->hit_buf->in_use = 0;
+			}
 		} else {
 			io_prep_pread(iocb, f->fd, io_u->xfer_buf, io_u->xfer_buflen, io_u->offset);
 		}
@@ -162,6 +165,7 @@ static struct io_u *fio_libaio_event(struct thread_data *td, int event)
 		if (ev->res > io_u->xfer_buflen)
 			io_u->error = -ev->res;
 		else
+			//zhengxd: 这里的res是实际读写的字节数, resid是剩余的字节数
 			io_u->resid = io_u->xfer_buflen - ev->res;
 	} else
 		io_u->error = 0;
@@ -339,7 +343,6 @@ static int fio_libaio_commit_hit(struct thread_data *td)
 		nr = min((unsigned int) nr, ld->entries - ld->tail);
 		io_us = ld->io_us + ld->tail;
 		iocbs = ld->iocbs + ld->tail;
-
 		ret = io_submit_hit(ld->aio_ctx, nr, iocbs,ld->hit_bufs);
 		if (ret > 0) {
 			//记录时间

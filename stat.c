@@ -2603,7 +2603,6 @@ void __show_run_stats(void)
 		ts->latency_window = td->o.latency_window;
 
 		ts->hitchhike = td->o.hitchhike;
-		// printf("-----ts hitchhike is %d", ts->hitchhike);
 
 		ts->nr_block_infos = td->ts.nr_block_infos;
 		for (k = 0; k < ts->nr_block_infos; k++)

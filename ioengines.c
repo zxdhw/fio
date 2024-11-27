@@ -391,7 +391,7 @@ enum fio_q_status td_io_queue(struct thread_data *td, struct io_u *io_u)
 			td->rate_io_issue_bytes[ddir] += buflen * (td->o.hitchhike-1);
 		}
 	}
-	//加到libaio的queue中
+	//zhengxd: 加入到libaio/iouring的queue中
 	ret = td->io_ops->queue(td, io_u);
 	zbd_queue_io_u(td, io_u, ret);
 
@@ -436,7 +436,6 @@ enum fio_q_status td_io_queue(struct thread_data *td, struct io_u *io_u)
 		log_info("fio: first I/O failed. If %s is a zoned block device, consider --zonemode=zbd\n",
 			 io_u->file->file_name);
 	}
-
 	if (!td->io_ops->commit) {
 		io_u_mark_submit(td, 1);
 		io_u_mark_complete(td, 1);
@@ -464,7 +463,6 @@ enum fio_q_status td_io_queue(struct thread_data *td, struct io_u *io_u)
 		//提交iocb
 		if (td->io_u_queued >= td->o.iodepth_batch)
 			td_io_commit(td);
-
 		td->last_ddir_issued = ddir;
 	}
 
@@ -516,7 +514,6 @@ void td_io_commit(struct thread_data *td)
 		return;
 
 	io_u_mark_depth(td, td->io_u_queued);
-
 	if (td->io_ops->commit) {
 		ret = td->io_ops->commit(td);
 		if (ret)

@@ -429,7 +429,6 @@ static int get_next_block(struct thread_data *td, struct io_u *io_u,
 	assert(ddir_rw(ddir));
 
 	b = offset = -1ULL;
-
 	if (td_randtrimwrite(td) && ddir == DDIR_WRITE) {
 		/* don't mark randommap for these writes */
 		io_u_set(td, io_u, IO_U_F_BUSY_OK);
@@ -468,10 +467,7 @@ static int get_next_block(struct thread_data *td, struct io_u *io_u,
 					// hitchhike - 8; hio = 7; index(max) = 6
 					io_u->hit_buf->max = i-1;
 					io_u->hit_buf->in_use = 1;
-					// io_u->hit_buf->size = td->o.ba[ddir];
-	
 				}
-				// printf("----ret is %d, b is %lu, ba is %llu------\n", ret,b,td->o.ba[ddir]);
 			} else {
 				*is_random = false;
 				io_u_set(td, io_u, IO_U_F_BUSY_OK);
@@ -2163,21 +2159,20 @@ static void io_completed(struct thread_data *td, struct io_u **io_u_ptr,
 
 	if (!io_u->error && ddir_rw(ddir)) {
 		unsigned long long bytes = io_u->xfer_buflen - io_u->resid;
-		// printf(" -----byte is %llu, %llu, %llu-----\n", io_u->xfer_buflen,io_u->resid,bytes);
 		int ret;
 
 		/*
 		 * Make sure we notice short IO from here, and requeue them
 		 * appropriately!
 		 */
-		//暂时忽略这种情况
+		//zhengxd：resid is the remaining data to be transferred, ignore the remaining data in version 1.0。
 		if (bytes && io_u->resid) {
 			io_u->xfer_buflen = io_u->resid;
 			io_u->xfer_buf += bytes;
 			io_u->offset += bytes;
 			td->ts.short_io_u[io_u->ddir]++;
 			if(td->o.hitchhike){
-				printf("----A Short IO is noticed in hitchhike-----\n");
+				printf("----A short IO is noticed in hitchhike-----\n");
 			}
 			if (io_u->offset < io_u->file->real_file_size) {
 				requeue_io_u(td, io_u_ptr);

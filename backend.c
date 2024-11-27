@@ -1126,7 +1126,6 @@ static void do_io(struct thread_data *td, uint64_t *bytes_done)
 			if (should_check_rate(td))
 				td->rate_next_io_time[ddir] = usec_for_io(td, ddir);
 
-			//？？？？？
 			if (io_queue_event(td, io_u, &ret, ddir, &bytes_issued, 0, &comp_time))
 				break;
 
@@ -1329,7 +1328,7 @@ static int init_io_u(struct thread_data *td)
 		 * io_u buffers.
 		 */
 		io_u_qpush(&td->io_u_all, io_u);
-
+		//zhengxd: iouring io_u init
 		if (td->io_ops->io_u_init) {
 			int ret = td->io_ops->io_u_init(td, io_u);
 
@@ -1933,12 +1932,10 @@ static void *thread_main(void *data)
 	// printf("----aio is %ld----\n",stats_bufs->io_count_kernel);
 	//test1: inter
 	// printf("----get user time is %ld----\n",stats_bufs->get_user_time);
-	// printf("----copy iocb time is %ld----\n",stats_bufs->copy_user_time);
-	// printf("----buffer check time is %ld----\n",stats_bufs->aio_setup_time);
-	// printf("----pin page time is %ld----\n",stats_bufs->get_page_time);
-	// printf("----hit buf time is %ld----\n",stats_bufs->hit_buf_time);
-	// printf("----hit tag time is %ld----\n",stats_bufs->hit_tag_time);
-	// printf("----dma time is %ld----\n",stats_bufs->dma_time);
+	// printf("----verify_time is %ld----\n",stats_bufs->verify_time);
+	// printf("----file map time is %ld----\n",stats_bufs->filemap_wait_time);
+	// printf("----iomap time is %ld----\n",stats_bufs->iomap_time);
+	// printf("----driver time is %ld----\n",stats_bufs->driver_time);
 	// printf("----dma unmap time is %ld----\n",stats_bufs->dma_unmap_time);
 
 	// // test2: layer
@@ -1949,6 +1946,7 @@ static void *thread_main(void *data)
 	// printf("----submit bio time is %ld----\n",stats_bufs->fs_submit_time);
 	// printf("----plug time is %ld----\n",stats_bufs->plug_time);
 	// printf("----irq time is %ld----\n",stats_bufs->interrupt_time);
+	// printf("----irq count is %ld----\n",stats_bufs->interrupt_count);
 	// printf("----read iter time is %ld----\n",stats_bufs->read_iter_time);
 	// printf("----read iter count is %ld----\n",stats_bufs->read_iter_count);
 
@@ -2106,14 +2104,11 @@ static void *thread_main(void *data)
 	// printf("----aio is %ld----\n",stats_bufs->io_count_kernel);
 	// // //test1: inter
 	// printf("----get user time is %ld----\n",stats_bufs->get_user_time);
-	// printf("----copy iocb time is %ld----\n",stats_bufs->copy_user_time);
-	// printf("----buffer check time is %ld----\n",stats_bufs->aio_setup_time);
-	// printf("----pin page time is %ld----\n",stats_bufs->get_page_time);
-	// printf("----hit buf time is %ld----\n",stats_bufs->hit_buf_time);
-	// printf("----hit tag time is %ld----\n",stats_bufs->hit_tag_time);
-	// printf("----dma time is %ld----\n",stats_bufs->dma_time);
-	// printf("----dma unmap time is %ld----\n",stats_bufs->dma_unmap_time);
-
+	// printf("----verify_time is %ld----\n",stats_bufs->verify_time);
+	// printf("----file map time is %ld----\n",stats_bufs->filemap_wait_time);
+	// printf("----iomap time is %ld----\n",stats_bufs->iomap_time);
+	// printf("----driver time is %ld----\n",stats_bufs->driver_time);
+	
 	// //test2: layer
 	// printf("----io time kernel is %ld----\n",stats_bufs->io_time_kernel);
 	// printf("----aio time is %ld----\n",stats_bufs->aio_time);
@@ -2122,11 +2117,10 @@ static void *thread_main(void *data)
 	// printf("----submit bio time is %ld----\n",stats_bufs->fs_submit_time);
 	// printf("----plug time is %ld----\n",stats_bufs->plug_time);
 	// printf("----irq time is %ld----\n",stats_bufs->interrupt_time);
+	// printf("----irq count is %ld----\n",stats_bufs->interrupt_count);
 	// printf("----read iter time is %ld----\n",stats_bufs->read_iter_time);
 	// printf("----read iter count is %ld----\n",stats_bufs->read_iter_count);
 
-	// //count
-	// printf("----io count is %ld----\n",stats_bufs->io_count_kernel);
 
 	// free(stats_bufs);
 
