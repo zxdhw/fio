@@ -119,7 +119,7 @@ struct hit_stats {
 	long interrupt_count;
 
 };
-
+#define HIT_MAX 125;
 struct hitchhiker {
 	uint32_t max;
 	uint32_t in_use;

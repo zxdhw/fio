@@ -147,6 +147,8 @@ enum {
  */
 #define IORING_SETUP_DEFER_TASKRUN	(1U << 13)
 
+#define IORING_SETUP_HIT	(1U << 16)	/* io_context is hitchhike */
+
 enum {
 	IORING_OP_NOP,
 	IORING_OP_READV,
@@ -279,6 +281,7 @@ enum {
 #define IORING_OFF_SQ_RING		0ULL
 #define IORING_OFF_CQ_RING		0x8000000ULL
 #define IORING_OFF_SQES			0x10000000ULL
+#define IORING_OFF_HIT			0x90000000ULL
 
 /*
  * Filled with the offset for mmap(2)
@@ -340,7 +343,8 @@ struct io_uring_params {
 	__u32 sq_thread_idle;
 	__u32 features;
 	__u32 wq_fd;
-	__u32 resv[3];
+	__u32 hitchhike;
+	__u32 resv[2];
 	struct io_sqring_offsets sq_off;
 	struct io_cqring_offsets cq_off;
 };
