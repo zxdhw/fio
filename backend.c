@@ -1126,7 +1126,6 @@ static void do_io(struct thread_data *td, uint64_t *bytes_done)
 			if (should_check_rate(td))
 				td->rate_next_io_time[ddir] = usec_for_io(td, ddir);
 
-			//？？？？？
 			if (io_queue_event(td, io_u, &ret, ddir, &bytes_issued, 0, &comp_time))
 				break;
 
@@ -1329,7 +1328,7 @@ static int init_io_u(struct thread_data *td)
 		 * io_u buffers.
 		 */
 		io_u_qpush(&td->io_u_all, io_u);
-
+		//zhengxd: iouring io_u init
 		if (td->io_ops->io_u_init) {
 			int ret = td->io_ops->io_u_init(td, io_u);
 

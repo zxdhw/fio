@@ -391,7 +391,7 @@ enum fio_q_status td_io_queue(struct thread_data *td, struct io_u *io_u)
 			td->rate_io_issue_bytes[ddir] += buflen * (td->o.hitchhike-1);
 		}
 	}
-	//加到libaio的queue中
+	//zhengxd: 加入到libaio/iouring的queue中
 	ret = td->io_ops->queue(td, io_u);
 	zbd_queue_io_u(td, io_u, ret);
 
