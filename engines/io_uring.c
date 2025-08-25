@@ -396,10 +396,12 @@ static int fio_ioring_prep(struct thread_data *td, struct io_u *io_u)
 			 * adjusted these
 			 */
 			iov->iov_base = io_u->xfer_buf;
+			//zhengxd: 4KB
 			iov->iov_len = io_u->xfer_buflen;
 
 			sqe->opcode = ddir_to_op[io_u->ddir][!!o->nonvectored];
 			if (o->nonvectored) {
+				//zhengxd: default path
 				sqe->addr = (unsigned long) iov->iov_base;
 				sqe->len = iov->iov_len;
 			} else {
